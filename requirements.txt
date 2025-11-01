@@ -3,3 +3,4 @@ Flask
 opencv-python-headless
 Pillow
 python-dotenv
+translate
