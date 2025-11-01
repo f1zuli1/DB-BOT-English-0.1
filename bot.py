@@ -43,6 +43,7 @@ points = defaultdict(int)
 manager = DB_Manager(DATABASE)
 manager.create_tables()
 bot.spectate_msgs = {}
+TOKEN = os.gotevn('TOkEn')
 
 @bot.event
 async def on_ready():
@@ -1438,4 +1439,5 @@ async def photoshow(ctx):
     await ctx.send("🖼 Photo list:", view=view) # Şəkillər siyahısı:
 
 #------------------------------------------------------------------------------------------------------------------------------------------
-bot.run(token)
+bot.run(TOKEN)
+
