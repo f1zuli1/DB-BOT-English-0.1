@@ -7,6 +7,7 @@ import asyncio
 import time
 import datetime
 import subprocess
+from keep_alive import keep_alive
 from PIL import Image
 from PIL import ImageFont
 from PIL import ImageDraw
@@ -21,10 +22,10 @@ from logic import Pokemon
 from logic import Wizard,Fighter
 from logic import quiz_questions
 from logic import DB_Manager
-from logic import allowed_domains, warnings
+from logic import allowed_domains, warnings 
 from logic import init_db, save_file, get_user_files
-from config import token, DATABASE
-from datetime import datetime
+from config import DATABASE, token  
+from datetime import datetime   
 
 # Bot için yetkileri/intents ayarlama
 intents = discord.Intents.default()  # Varsayılan ayarların alınması
@@ -43,7 +44,7 @@ points = defaultdict(int)
 manager = DB_Manager(DATABASE)
 manager.create_tables()
 bot.spectate_msgs = {}
-TOKEN = os.gotevn('TOkEn')
+keep_alive()
 
 @bot.event
 async def on_ready():
@@ -236,43 +237,36 @@ async def feed(ctx):
     else:
         await ctx.send("You don't have a Pokémon!") # Pokémon'un yok!
 
-#------------- MODAL ---------------------------------------------------------------------------------------------------------------------------------------
+# ---------------------- MODAL --------------------------------------
 
-# Define Modal window
-class TestModal(ui.Modal, title='Create Profile'): # Create Profil -> Create Profile
-    field_1 = ui.TextInput(label='Name') # Ad -> Name
-    field_2 = ui.TextInput(label='Surname', style=TextStyle.paragraph) # Soyad -> Surname
-    field_3 = ui.TextInput(label='Date of Birth', placeholder="DD/MM/YY") # Dogum Tarixi -> Date of Birth
+class TestModal(ui.Modal, title='Create Profile'):
+    field_1 = ui.TextInput(label='Name')
+    field_2 = ui.TextInput(label='Surname', style=TextStyle.paragraph)
+    field_3 = ui.TextInput(label='Date of Birth', placeholder="DD/MM/YY")
 
     async def on_submit(self, interaction: discord.Interaction):
         user_id = interaction.user.id
-        ad = self.field_1.value
-        soyad = self.field_2.value
-        dogum_tarixi = self.field_3.value
+        user_name = self.field_1.value
+        user_surname = self.field_2.value
+        user_date_of_birth = self.field_3.value
 
-        manager.insert_profile(user_id, ad, soyad, dogum_tarixi)
-        await interaction.response.send_message("Your profile has been saved!", ephemeral=True) # Profiliniz kaydedildi!
+        manager.insert_profile(user_id, user_name, user_surname, user_date_of_birth)
+        await interaction.response.send_message("✅ Your profile has been saved!", ephemeral=True)
 
-# Define Button
+# ---------------------- BUTTON & VIEW -------------------------------
+
 class TestButton(ui.Button):
-    def __init__(self, label="Profile", style=ButtonStyle.blurple, row=0): # Profil -> Profile
+    def __init__(self, label="Create Profile", style=ButtonStyle.blurple, row=0):
         super().__init__(label=label, style=style, row=row)
 
     async def callback(self, interaction: discord.Interaction):
-        # Only show the modal
         await interaction.response.send_modal(TestModal())
 
-# View containing the button
 class TestView(ui.View):
     def __init__(self):
         super().__init__()
-        self.add_item(TestButton(label="Profile")) # Profil -> Profile
-# --------------------- Modal ve Buton --------------------------
+        self.add_item(TestButton(label="Create Profile"))
 # --------------------- Komutlar ---------------------
-import discord
-from discord.ext import commands
-import asyncio
-
 @bot.command()
 async def infocommand(ctx):
     # Typing effect
@@ -291,7 +285,7 @@ async def infocommand(ctx):
 `!projects` - Show all your projects
 `!update_projects` - Update project information
 `!skills` - Add a skill to a project
-`!delete` - Delete a project 
+`!delete_project` - Delete a project 
 """, inline=False)
 
     embed.add_field(name="👤 **Profile Commands**", value="""
@@ -337,63 +331,76 @@ Otherwise, the bot will automatically ban you. 🚫
     await ctx.message.add_reaction("👀")
     await ctx.send(f"**{ctx.author.display_name}** viewed the command list! 🔥") # komanda siyahısına baxdı! 🔥
 
-#---------------------- Profile ----------------------------------------
-
-#-----  !createprofile ---------
+#---------------------- Profil ----------------------------------------
 @bot.command()
 async def createprofil(ctx):
-    await ctx.send("You can create a profile by clicking this button:", view=TestView()) # Bu düğmeye basarak profil oluşturabilirsiniz:
+    await ctx.send("Click the button below to create your profile:", view=TestView())
 
-#------- !profile ---------------
 @bot.command()
 async def profil(ctx):
     user_id = ctx.author.id
     profile = manager.get_profile(user_id)
     if profile:
-        ad, soyad, dogum_tarixi = profile
-        await ctx.send(f"ID: {user_id}\nName: {ad}\nSurname: {soyad}\nDate of Birth: {dogum_tarixi}") # Ad: -> Name:, Soyad: -> Surname:, Dogum Tarihi: -> Date of Birth:
+        user_name, user_surname, user_date_of_birth = profile
+        await ctx.send(
+            f"🪪 **Your Profile**\n"
+            f"**ID:** {user_id}\n"
+            f"**Name:** {user_name}\n"
+            f"**Surname:** {user_surname}\n"
+            f"**Date of Birth:** {user_date_of_birth}"
+        )
     else:
-        await ctx.send("You haven't created a profile yet. Use the !createprofil command.") # Henüz bir profil oluşturmadınız. !createprofil komutunu kullanın.
+        await ctx.send("⚠️ You haven't created a profile yet. Use `!createprofil` to create one.")
 
-#------- !deleteprofile --------
 @bot.command()
-async def deleteprofil(ctx, user_id: int):
+async def deleteprofil(ctx):
+    user_id = ctx.author.id
     profile = manager.get_profile(user_id)
     if profile:
         manager.delete_profile(user_id)
-        await ctx.send(f"The profile with ID {user_id} was successfully deleted.") # ID’li profil başarıyla silindi.
+        await ctx.send(f"🗑️ Your profile (ID: {user_id}) has been successfully deleted.")
     else:
-        await ctx.send(f"Could not find the profile with ID {user_id}.") # ID’li profili bulamadım.
-        
-#--------- Project ----------------------------------------------------------------
+        await ctx.send(f"⚠️ No profile found for your account.")
+
+#---------------------- Project ----------------------------------------
 
 @bot.command(name='new_project')
 async def new_project(ctx):
-    await ctx.send("Please enter the project name!") # Lütfen projenin adını girin!
+    await ctx.send("Please enter the project name!")  # Step 1
 
     def check(msg):
         return msg.author == ctx.author and msg.channel == ctx.channel
 
     name = await bot.wait_for('message', check=check)
     data = [ctx.author.id, name.content]
-    await ctx.send("Please send the link for the project!") # Lütfen projeye ait bağlantıyı gönderin!
+
+    await ctx.send("Please send the link for the project!")  # Step 2
     link = await bot.wait_for('message', check=check)
     data.append(link.content)
 
     statuses = [x[0] for x in manager.get_statuses()]
-    await ctx.send("Please enter the current status of the project!", delete_after=60.0) # Lütfen projenin mevcut durumunu girin!
-    await ctx.send("\n".join(statuses), delete_after=60.0)
-    
+    await ctx.send("Please enter the current status of the project!", delete_after=60.0)
+    if statuses:
+        await ctx.send("\n".join(statuses), delete_after=60.0)
+    else:
+        await ctx.send("⚠️ No statuses found in the database! Please add at least one status before creating a project.", delete_after=60.0)
+        return
+
     status = await bot.wait_for('message', check=check)
     if status.content not in statuses:
-        await ctx.send("The status you selected is not in the list. Please try again!", delete_after=60.0) # Seçtiğiniz durum listede bulunmuyor. Lütfen tekrar deneyin!
+        await ctx.send("The status you selected is not in the list. Please try again!", delete_after=60.0)
         return
 
     status_id = manager.get_status_id(status.content)
     data.append(status_id)
-    manager.insert_project([tuple(data)])
-    await ctx.send("Project saved") # Proje kaydedildi
 
+    try:
+        manager.insert_project([tuple(data)])
+        await ctx.send("✅ Project saved successfully!")
+    except Exception as e:
+        await ctx.send(f"⚠️ An error occurred while saving the project: {e}")
+
+#------- !projects ---------------
 @bot.command(name='projects')
 async def get_projects(ctx):
     user_id = ctx.author.id
@@ -402,15 +409,16 @@ async def get_projects(ctx):
         text = "\n".join([f"Project name: {x[2]} \nLink: {x[4]}\n" for x in projects])
         await ctx.send(text)
     else:
-        await ctx.send("You don't have any projects yet!\nConsider adding one! You can use the !new_project command.") # Henüz herhangi bir projeniz yok!\nBir tane eklemeyi düşünün! !new_project komutunu kullanabilirsiniz.
+        await ctx.send("You don't have any projects yet!\nConsider adding one! You can use the !new_project command.")
 
+#------- !skills ----------------
 @bot.command(name='skills')
 async def skills(ctx):
     user_id = ctx.author.id
     projects = manager.get_projects(user_id)
     if projects:
         projects = [x[2] for x in projects]
-        await ctx.send('Select the project you want to add a skill to') # Bir beceri eklemek istediğiniz projeyi seçin
+        await ctx.send('Select the project you want to add a skill to')
         await ctx.send("\n".join(projects))
 
         def check(msg):
@@ -418,30 +426,31 @@ async def skills(ctx):
 
         project_name = await bot.wait_for('message', check=check)
         if project_name.content not in projects:
-            await ctx.send('You do not own this project, please try again! Select the project you want to add a skill to') # Bu projeye sahip değilsiniz, lütfen tekrar deneyin! Beceri eklemek istediğiniz projeyi seçin
+            await ctx.send('You do not own this project, please try again!')
             return
 
         skills = [x[1] for x in manager.get_skills()]
-        await ctx.send('Select a skill') # Bir beceri seçin
+        await ctx.send('Select a skill')
         await ctx.send("\n".join(skills))
 
         skill = await bot.wait_for('message', check=check)
         if skill.content not in skills:
-            await ctx.send('It seems the skill you selected is not in the list! Please try again! Select a skill') # Görünüşe göre seçtiğiniz beceri listede yok! Lütfen tekrar deneyin! Bir beceri seçin
+            await ctx.send('It seems the skill you selected is not in the list! Please try again!')
             return
 
         manager.insert_skill(user_id, project_name.content, skill.content)
-        await ctx.send(f'{skill.content} skill was added to the {project_name.content} project') # becerisi {project_name.content} projesine eklendi
+        await ctx.send(f'{skill.content} skill was added to the {project_name.content} project')
     else:
-        await ctx.send("You don't have any projects yet!\nConsider adding one! You can use the !new_project command.") # Henüz herhangi bir projeniz yok!\nBir tane eklemeyi düşünün! !new_project komutunu kullanabilirsiniz.
+        await ctx.send("You don't have any projects yet!\nConsider adding one! You can use the !new_project command.")
 
+#------- !delete_project --------
 @bot.command(name='delete_project')
 async def delete_project(ctx):
     user_id = ctx.author.id
     projects = manager.get_projects(user_id)
     if projects:
         projects = [x[2] for x in projects]
-        await ctx.send("Select the project you want to delete") # Silmek istediğiniz projeyi seçin
+        await ctx.send("Select the project you want to delete")
         await ctx.send("\n".join(projects))
 
         def check(msg):
@@ -449,22 +458,23 @@ async def delete_project(ctx):
 
         project_name = await bot.wait_for('message', check=check)
         if project_name.content not in projects:
-            await ctx.send('You do not own this project, please try again!') # Bu projeye sahip değilsiniz, lütfen tekrar deneyin!
+            await ctx.send('You do not own this project, please try again!')
             return
 
         project_id = manager.get_project_id(project_name.content, user_id)
         manager.delete_project(user_id, project_id)
-        await ctx.send(f'{project_name.content} project was deleted from the database!') # projesi veri tabanından silindi!
+        await ctx.send(f'{project_name.content} project was deleted from the database!')
     else:
-        await ctx.send("You don't have any projects yet!\nConsider adding one! You can use the !new_project command.") # Henüz herhangi bir projeniz yok!\nBir tane eklemeyi düşünün! !new_project komutunu kullanabilirsiniz.
+        await ctx.send("You don't have any projects yet!\nConsider adding one! You can use the !new_project command.")
 
+#------- !update_projects -------
 @bot.command(name='update_projects')
 async def update_projects(ctx):
     user_id = ctx.author.id
     projects = manager.get_projects(user_id)
     if projects:
         projects = [x[2] for x in projects]
-        await ctx.send("Select the project you want to update") # Güncellemek istediğiniz projeyi seçin
+        await ctx.send("Select the project you want to update")
         await ctx.send("\n".join(projects))
 
         def check(msg):
@@ -472,39 +482,44 @@ async def update_projects(ctx):
 
         project_name = await bot.wait_for('message', check=check)
         if project_name.content not in projects:
-            await ctx.send("An error occurred! Please select the project you want to update again:") # Bir hata oldu! Lütfen güncellemek istediğiniz projeyi tekrar seçin:
+            await ctx.send("An error occurred! Please select the project you want to update again:")
             return
 
-        await ctx.send("What do you want to change in the project?") # Projede neyi değiştirmek istersiniz?
-        # Translated attribute keys for display, values remain the same for database mapping
-        attributes = {'Project name': 'project_name', 'Description': 'description', 'Project link': 'url', 'Project status': 'status_id'}
+        await ctx.send("What do you want to change in the project?")
+        attributes = {
+            'Project name': 'project_name',
+            'Description': 'description',
+            'Project link': 'url',
+            'Project status': 'status_id'
+        }
         await ctx.send("\n".join(attributes.keys()))
 
         attribute = await bot.wait_for('message', check=check)
         if attribute.content not in attributes:
-            await ctx.send("An error occurred! Please try again!") # Hata oluştu! Lütfen tekrar deneyin!
+            await ctx.send("An error occurred! Please try again!")
             return
 
-        # Note: 'Durum' was translated to 'Project status' for the user prompt, but the check for 'Durum' below must be updated to 'Project status' if the attributes list is used. 
-        # Since I translated attributes keys to English, I will use 'Project status' here:
-        if attribute.content == 'Project status': 
+        if attribute.content == 'Project status':
             statuses = manager.get_statuses()
-            await ctx.send("Select a new status for your project") # Projeniz için yeni bir durum seçin
+            if not statuses:
+                await ctx.send("⚠️ No statuses available in the database!")
+                return
+            await ctx.send("Select a new status for your project")
             await ctx.send("\n".join([x[0] for x in statuses]))
             update_info = await bot.wait_for('message', check=check)
             if update_info.content not in [x[0] for x in statuses]:
-                await ctx.send("Wrong status selected, please try again!") # Yanlış durum seçildi, lütfen tekrar deneyin!
+                await ctx.send("Wrong status selected, please try again!")
                 return
             update_info = manager.get_status_id(update_info.content)
         else:
-            await ctx.send(f"Enter a new value for {attribute.content}") # için yeni bir değer girin
+            await ctx.send(f"Enter a new value for {attribute.content}")
             update_info = await bot.wait_for('message', check=check)
             update_info = update_info.content
 
         manager.update_projects(attributes[attribute.content], (update_info, project_name.content, user_id))
-        await ctx.send("All operations completed! Project updated!") # Tüm işlemler tamamlandı! Proje güncellendi!
+        await ctx.send("✅ All operations completed! Project updated successfully!")
     else:
-        await ctx.send("You don't have any projects yet!\nConsider adding one! You can use the !new_project command.") # Henüz herhangi bir projeniz yok!\nBir tane eklemeyi düşünün! !new_project komutunu kullanabilirsiniz.
+        await ctx.send("You don't have any projects yet!\nConsider adding one! You can use the !new_project command.")
 
 #----------------------------- CHESS.BOT ----------------------------------------------------------------------------------------
 intents = discord.Intents.default()
@@ -1202,21 +1217,68 @@ async def send_image(user, image_path, prize_id):
 
 @bot.event
 async def on_interaction(interaction):
-    if interaction.type == discord.InteractionType.component:
-        custom_id = interaction.data['custom_id']
-        user_id = interaction.user.id
+    if interaction.type != discord.InteractionType.component:
+        return
 
+    custom_id = interaction.data.get('custom_id')
+    user_id = interaction.user.id
+
+    try:
+        # Maksimum 3 qalib ola bilər
         if manager.get_winners_count(custom_id) < 3:
             res = manager.add_winner(user_id, custom_id)
-            if res:
-                img = manager.get_prize_img(custom_id)
-                with open(f'img/{img}', 'rb') as photo:
-                    file = discord.File(photo)
-                    await interaction.response.send_message(file=file, content="Congratulations, you claimed the image!") # Tebrikler, resmi aldınız!
-            else:
-                await interaction.response.send_message(content="You already own this image!", ephemeral=True) # Bu resme zaten sahipsiniz!
+
+            if not res:
+                # İstifadəçi artıq bu şəkilə sahibdirsə
+                await interaction.response.send_message(
+                    content="⚠️ You already own this image!",
+                    ephemeral=True
+                )
+                return
+
+            img = manager.get_prize_img(custom_id)
+
+            if not img:
+                await interaction.response.send_message(
+                    content=f"⚠️ No image found for prize id: {custom_id}. Please check the database.",
+                    ephemeral=True
+                )
+                return
+
+            import os
+            img_path = f'img/{img}'
+
+            if not os.path.exists(img_path):
+                await interaction.response.send_message(
+                    content=f"⚠️ The file `{img}` was not found in the `img/` folder.",
+                    ephemeral=True
+                )
+                return
+
+            # Əgər hər şey qaydasındadırsa, şəkli göndər
+            with open(img_path, 'rb') as photo:
+                file = discord.File(photo)
+                await interaction.response.send_message(
+                    file=file,
+                    content="🎉 Congratulations, you claimed the image!"
+                )
+
         else:
-            await interaction.response.send_message(content="Unfortunately, someone else has already claimed this image...", ephemeral=True) # Maalesef, bu resmi bir başkası çoktan aldı...
+            await interaction.response.send_message(
+                content="😔 Unfortunately, someone else has already claimed this image...",
+                ephemeral=True
+            )
+
+    except discord.errors.InteractionResponded:
+        # Əgər interaction artıq cavablandırılıbsa — problemi sakitcə ötür
+        print("⚠️ Interaction already responded, skipping duplicate response.")
+    except Exception as e:
+        print(f"❌ Error in on_interaction: {e}")
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                content=f"⚠️ An unexpected error occurred: {e}",
+                ephemeral=True
+            )
 
 @bot.event
 async def on_ready():
@@ -1439,5 +1501,4 @@ async def photoshow(ctx):
     await ctx.send("🖼 Photo list:", view=view) # Şəkillər siyahısı:
 
 #------------------------------------------------------------------------------------------------------------------------------------------
-bot.run(TOKEN)
-
+bot.run(token)
