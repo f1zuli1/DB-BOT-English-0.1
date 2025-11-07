@@ -1,6 +1,7 @@
 discord.py
-Flask
-opencv-python-headless
-Pillow
+flask
+opencv-python
+pillow
 python-dotenv
-translate
+asyncio
+requests
